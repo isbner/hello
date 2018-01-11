@@ -1,0 +1,116 @@
+# -*- coding: utf-8 -*-
+import hashlib
+import web
+import lxml
+import datetime, time
+import os
+import urllib2,json
+import requests
+from lxml import etree
+from os import path, access, R_OK, W_OK
+# from fushan_homework import FushanUtil
+from github import Github
+from shutil import copy
+import urllib
+
+
+# todo: this GithubGitFileManager is intended for fushan project, not useful for generic purpose.
+class GithubGitFileManager:
+    def __init__(self, work_dir = 'c:\\liuyang\\source\\github-fushan'):
+        self.work_dir = work_dir
+
+    def put_file(self, full_path):
+        url = None
+        if path.exists(full_path) and path.isfile(full_path) and access(full_path, R_OK):
+            file_name = os.path.basename(full_path)
+        else:
+            print full_path + "is not a valid file path"
+            return url
+        copy(full_path, os.path.join(self.work_dir, "docs"))
+        cwd = os.getcwd()
+        os.chdir(self.work_dir)
+        os.system("git stage %s" % (self.work_dir))
+        os.system("git commit -m \"pic\" %s" % (self.work_dir))
+        os.system("git push -u github-fushan master:1")
+        os.chdir(cwd)
+        return self.get_url(file_name)
+
+    def get_url(self, file_name):
+        try:
+            url = "https://isbner.github.io/fushan/docs/" + file_name
+            url = url + "&v=" + str(int(time.time()))
+        except Exception, e:
+            print e
+            url = None
+        return url
+
+
+class GithubFileManager:
+    def __init__(self, repo_name='fushan'):
+        try:
+            # todo: replace this with access token
+            self.gh = Github("isbner", "word2word")
+            self.user = self.gh.get_user()
+            self.repo = self.user.get_repo(repo_name)
+        except Exception, e:
+            print "Failed to init github repo since: " + e
+
+    def post_file(self, local_full_path, remote_path):
+        try:
+            url = None
+            if path.exists(local_full_path) and path.isfile(local_full_path) and access(local_full_path, R_OK):
+                file_name = os.path.basename(local_full_path)
+            else:
+                print local_full_path + " is not a valid file path"
+                exit(-1)
+            with open(local_full_path, "rb") as f:
+                data = f.read()
+            # todo: fix this sha thing...
+            sha = "9693319ede0d8da4b4510e870e9f972e2df1562f"
+            self.repo.update_file(path = remote_path,
+                                  message = 'commit a new file',
+                                  content = str(data),
+                                  sha = sha)
+        except Exception, e:
+            print "Github failed to update file: " + remote_path + " since " + str(e)
+            exit(-1)
+        # todo: this return value is not useful now since not every repo has github page.
+        return self.get_url(file_name)
+
+    def fetch_file(self, remote_full_path, local_path):
+        try:
+            if path.exists(local_path) and access(local_path, W_OK):
+                local_full_path = os.path.join(local_path, os.path.basename(remote_full_path))
+            else:
+                print local_path + "is not a valid file path"
+                return -1
+
+            # todo: truly ugly codes as below :(. Fix it.
+            url = "https://github.com/isbner/fushan/blob/master/" + remote_full_path + "?raw=true"
+            r = requests.get(url)
+            with open(local_full_path, "wb") as of:
+                of.write(r.content)
+        except Exception, e:
+            print "Github failed to fetch file: " + remote_full_path + " since " + e
+        return 0
+
+    def get_url(self, file_name):
+        # todo: this should be refactored since it is not generic enough
+        try:
+            url = "https://isbner.github.io/fushan/docs/" + file_name
+            url = url + "&v=" + str(int(time.time()))
+        except Exception, e:
+            print e
+            url = None
+        return url
+
+
+def test_github():
+    g = GithubFileManager()
+    g.post_file("C:\\Users\\Andy\\Desktop\\20161015133638413.jpg", "docs/")
+    g.fetch_file("docs/frontpage_today.jpg", "c:\liuyang")
+    return 0
+
+if __name__ == '__main__':
+    ret = test_github()
+    exit(ret)
